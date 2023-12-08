@@ -21,5 +21,10 @@ namespace StoreIT.Services
         {
             return _context.Files.Where(f => f.ChatID == chatID);
         }
+
+        public FileEntry? RetrieveFile(Guid id)
+        {
+            return _context.Files.Where(f => f.Id == id).FirstOrDefault();
+        }
     }
 }

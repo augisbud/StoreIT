@@ -21,13 +21,6 @@ namespace StoreIT.Controllers
             _chatID = configuration.GetValue<string>("Telegram:ChatID") ?? throw new ArgumentNullException("No Chat ID provided.");
         }
 
-        [HttpPost("list")]
-        [ProducesResponseType(StatusCodes.Status200OK)]
-        public IEnumerable<FileEntry> List(string chatID)
-        {
-            return _repository.ListFiles(chatID);
-        }
-
         [HttpPost("upload")]
         [ProducesResponseType(StatusCodes.Status202Accepted)]
         public async Task<IActionResult> Upload(IFormFile[] files)
@@ -35,18 +28,54 @@ namespace StoreIT.Controllers
             foreach (var file in files)
             {
                 int parts = 0;
+                var externalFileIds = new List<string>();
                 using var inputStream = file.OpenReadStream();
 
                 while(inputStream.Position < file.Length)
-                    await ParseStream(inputStream, $"{file.FileName}.part{parts++}", 10 * 1024 * 1024);
+                    externalFileIds.Add(await ParseStream(inputStream, $"{file.FileName}.part{parts++}", 1024 * 1024));
 
-                _repository.AddFile(new FileEntry(_chatID, file.FileName, parts, 10 * 1024 * 1024));
+                _repository.AddFile(new FileEntry(_chatID, file.FileName, 10 * 1024 * 1024, externalFileIds));
             }
 
             return Accepted();
         }
 
-        private async Task ParseStream(Stream input, string part, int chunkSize)
+        [HttpPost("list")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public IEnumerable<FileEntry> List(string chatID)
+        {
+            return _repository.ListFiles(chatID);
+        }
+
+        [HttpGet("retrieve")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> Retrieve(Guid fileId)
+        {
+            var fileEntry = _repository.RetrieveFile(fileId);
+            if (fileEntry == null)
+            {
+                return NotFound("File not found.");
+            }
+
+            var combinedStream = new MemoryStream();
+
+            foreach (var externalFileId in fileEntry.ExternalFileIds)
+            {
+                var fileInfo = await _telegramBotClient.GetFileAsync(externalFileId);
+                using var fileStream = new MemoryStream();
+
+                await _telegramBotClient.DownloadFileAsync(fileInfo.FilePath ?? throw new ArgumentNullException("File Path from Telegram API was NULL"), fileStream);
+                fileStream.Position = 0;
+                await fileStream.CopyToAsync(combinedStream);
+            }
+
+            combinedStream.Position = 0;
+            return File(combinedStream, "application/octet-stream", fileEntry.FileName);
+        }
+
+
+        private async Task<string> ParseStream(Stream input, string part, int chunkSize)
         {
             var buffer = new byte[chunkSize];
             var chunkStream = new MemoryStream();
@@ -65,6 +94,11 @@ namespace StoreIT.Controllers
                 chatId: _chatID,
                 document: InputFile.FromStream(stream: chunkStream, fileName: part)
             );
+
+            if(message.Document == null)
+                throw new ArgumentNullException("Message Document was NULL");
+
+            return message.Document.FileId;
         }
     }
 }

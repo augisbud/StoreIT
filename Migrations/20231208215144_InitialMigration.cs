@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -18,8 +19,8 @@ namespace StoreIT.Migrations
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     ChatID = table.Column<string>(type: "text", nullable: false),
                     FileName = table.Column<string>(type: "text", nullable: false),
-                    Parts = table.Column<int>(type: "integer", nullable: false),
-                    ChunkSize = table.Column<int>(type: "integer", nullable: false)
+                    ChunkSize = table.Column<int>(type: "integer", nullable: false),
+                    ExternalFileIds = table.Column<List<string>>(type: "text[]", nullable: false)
                 },
                 constraints: table =>
                 {

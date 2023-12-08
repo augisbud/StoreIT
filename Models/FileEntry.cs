@@ -5,14 +5,14 @@ namespace StoreIT.Models
         public Guid Id { get; set; }
         public string ChatID { get; set; }
         public string FileName { get; set; }
-        public int Parts { get; set; }
         public int ChunkSize { get; set; }
+        public List<string> ExternalFileIds { get; set; }
 
-        public FileEntry(string chatID, string fileName, int parts, int chunkSize) {
+        public FileEntry(string chatID, string fileName, int chunkSize, List<string> externalFileIds) {
             ChatID = chatID;
             FileName = fileName;
-            Parts = parts;
             ChunkSize = chunkSize;
+            ExternalFileIds = externalFileIds;
         }
     }
 }
