@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using StoreIT.Models;
+using StoreIT.Services;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 
@@ -8,13 +10,22 @@ namespace StoreIT.Controllers
     [Route("api")]
     public class APIController : ControllerBase
     {
+        private readonly FilesRepository _repository;
         private readonly ITelegramBotClient _telegramBotClient;
         private readonly string _chatID;
 
-        public APIController(IConfiguration configuration)
+        public APIController(IConfiguration configuration, FilesRepository repository)
         {
+            _repository = repository;
             _telegramBotClient = new TelegramBotClient(configuration.GetValue<string>("Telegram:Token") ?? throw new ArgumentNullException("No Token Provided."));
             _chatID = configuration.GetValue<string>("Telegram:ChatID") ?? throw new ArgumentNullException("No Chat ID provided.");
+        }
+
+        [HttpPost("list")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        public IEnumerable<FileEntry> List(string chatID)
+        {
+            return _repository.ListFiles(chatID);
         }
 
         [HttpPost("upload")]
@@ -23,9 +34,13 @@ namespace StoreIT.Controllers
         {
             foreach (var file in files)
             {
+                int parts = 0;
                 using var inputStream = file.OpenReadStream();
-                for(int i = 0; inputStream.Position < file.Length; i++)
-                    await ParseStream(inputStream, $"{file.FileName}.part{i}", 10 * 1024 * 1024);
+
+                while(inputStream.Position < file.Length)
+                    await ParseStream(inputStream, $"{file.FileName}.part{parts++}", 10 * 1024 * 1024);
+
+                _repository.AddFile(new FileEntry(_chatID, file.FileName, parts, 10 * 1024 * 1024));
             }
 
             return Accepted();
