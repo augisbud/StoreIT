@@ -13,12 +13,14 @@ namespace StoreIT.Controllers
         private readonly FilesRepository _repository;
         private readonly ITelegramBotClient _telegramBotClient;
         private readonly string _chatID;
+        private readonly int _chunkSize;
 
         public APIController(IConfiguration configuration, FilesRepository repository)
         {
             _repository = repository;
             _telegramBotClient = new TelegramBotClient(configuration.GetValue<string>("Telegram:Token") ?? throw new ArgumentNullException("No Token Provided."));
             _chatID = configuration.GetValue<string>("Telegram:ChatID") ?? throw new ArgumentNullException("No Chat ID provided.");
+            _chunkSize = configuration.GetValue<int>("SizeLimitations:Part");
         }
 
         [HttpPost("upload")]
@@ -32,9 +34,9 @@ namespace StoreIT.Controllers
                 using var inputStream = file.OpenReadStream();
 
                 while(inputStream.Position < file.Length)
-                    externalFileIds.Add(await ParseStream(inputStream, $"{file.FileName}.part{parts++}", 1024 * 1024));
+                    externalFileIds.Add(await ParseStream(inputStream, $"{file.FileName}.part{parts++}", _chunkSize));
 
-                _repository.AddFile(new FileEntry(_chatID, file.FileName, 10 * 1024 * 1024, externalFileIds));
+                _repository.AddFile(new FileEntry(_chatID, file.FileName, _chunkSize, externalFileIds));
             }
 
             return Accepted();
